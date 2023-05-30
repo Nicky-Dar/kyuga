@@ -1,0 +1,78 @@
+---
+- name: token-worker
+  hosts: master
+  become: true
+  tasks:
+    # add host files
+    - name: config /etc/hosts
+      blockinfile:
+        path: /etc/hosts
+        backup: yes
+        block: |
+          10.5.44.181 kyuga-master
+          10.5.44.138 kyuga-worker1 
+          10.5.44.150 kyuga-worker2 
+
+    # Join Node to Master
+    - name: get token worker-1
+      command: "microk8s add-node"
+      register: command_output1
+
+    - debug:
+        msg: "{{ command_output1 }}"
+
+    - name: Copy join key to tmp
+      become: no
+      local_action:
+        module: copy
+        content: "{{ command_output1.stdout_lines[4] }}"
+        dest: "/tmp/join_cluster1"
+        mode: 0777
+
+- name: add-worker-1
+  hosts: worker-1
+  become: true
+  tasks:
+    # Join Node to Master
+    - name: Copy join command from Ansible control to Worker /tmp
+      copy:
+        src: /tmp/join_cluster1
+        dest: /tmp/join_cluster
+        mode: 0777
+
+    - name: Join cluster
+      command: sh /tmp/join_cluster
+
+- name: add-token-2
+  hosts: master
+  become: true
+  tasks:
+    # Join Node to Master
+    - name: get token worker-2
+      command: "microk8s add-node"
+      register: command_output2
+
+    - debug:
+        msg: "{{ command_output2 }}"
+
+    - name: Copy join key to tmp
+      become: no
+      local_action:
+        module: copy
+        content: "{{ command_output2.stdout_lines[4] }}"
+        dest: "/tmp/join_cluster2"
+        mode: 0777
+
+- name: add-worker-2
+  hosts: worker-2
+  become: true
+  tasks:
+    # Join Node to Master
+    - name: Copy join command from Ansible control to Worker /tmp
+      copy:
+        src: /tmp/join_cluster2
+        dest: /tmp/join_cluster
+        mode: 0777
+
+    - name: Join cluster
+      command: sh /tmp/join_cluster
